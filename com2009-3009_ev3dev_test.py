@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 '''COM2009-3009 EV3DEV TEST PROGRAM'''
 
+#PLAN
+
+# Begin by panning around 360 if light above Threshold then head towards it 
+# using the ultrasonic to detect walls
+# Using old code from previous do obstacle avoidance
+# Gotta stop at light
+
 # Connect left motor to Output C and right motor to Output B
 # Connect an ultrasonic sensor to Input 3
 
@@ -13,6 +20,7 @@ import ev3dev.ev3 as ev3
 # state constants
 ON = True
 OFF = False
+
 
 def debug_print(*args, **kwargs):
     '''Print debug messages to stderr.
@@ -82,9 +90,6 @@ def main():
     set_cursor(OFF)
     set_font('Lat15-Terminus24x12')
 
-    # announce program start
-    ev3.Sound.speak('Starting Run').wait()
-
     # set the motor variables
     mb = ev3.LargeMotor('outB') # left
     mc = ev3.LargeMotor('outC') # right
@@ -92,6 +97,8 @@ def main():
     # set the ultrasonic sensor variable
     us2 = ev3.UltrasonicSensor('in2') # left
     us3 = ev3.UltrasonicSensor('in3') # right
+    ls1 = ev3.ColorSensor('in1')
+    ls1.mode = 'COL-AMBIENT'
 
     controller = PIDController()
 
@@ -108,9 +115,14 @@ def main():
             end_time = c_time + reset_period
         d_time = c_time-l_time
 
+
         l_sp, r_sp = controller.calculate_motors(us2.value(), us3.value(), d_time)
 
-        debug_print("l_sp: ", l_sp, ", r_sp: ", r_sp)
+        light = ls1.value() 
+        if (light > 40):
+            print("LIGHT AT"+str(c_time))
+
+        debug_print("l_sp: ", l_sp, ", r_sp: ", r_sp, light)
         mb.run_direct(duty_cycle_sp=l_sp)
         mc.run_direct(duty_cycle_sp=r_sp)
 
