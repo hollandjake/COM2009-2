@@ -7,16 +7,15 @@
 import os
 import sys
 import time
+import math
 import ev3dev.ev3 as ev3
 
 # state constants
 ON = True
 OFF = False
 
-
 def debug_print(*args, **kwargs):
     '''Print debug messages to stderr.
-
     This shows up in the output panel in VS Code.
     '''
     print(*args, **kwargs, file=sys.stderr)
@@ -37,12 +36,44 @@ def set_cursor(state):
 
 def set_font(name):
     '''Sets the console font
-
     A full list of fonts can be found with `ls /usr/share/consolefonts`
     '''
     os.system('setfont ' + name)
 
+def clamp(n, minn, maxn):
+    return max(min(maxn, n), minn)
 
+class PIDController:
+    def __init__(self, Ku=6, Tu=0.3):
+        self.Kp = 0.6 * Ku
+        self.Ki = (1.2 * Ku) / Tu
+        self.Kd = (3 * Ku * Tu) / 40
+        
+        self.sp = 100
+        self.reset()
+
+    def reset(self):
+        self.integral = 0
+        self.derivative = 0
+        self.lastError = 0
+
+    def calculate_motors(self, l_sen, r_sen, d_time):
+        error = (l_sen-r_sen)/2
+        self.integral += (error * d_time)/100
+        self.derivative = error - self.lastError
+
+        self.lastError = error
+
+        val = self.Kp * error + self.Ki * self.integral + self.Kd * self.derivative / d_time
+        debug_print(val)
+        val = clamp(val, -1000, 1000)
+
+        # calculate final motor speeds using PID value, clamp it between 0-100
+        l_sp = clamp(self.sp-val/15, 0, 100)
+        r_sp = clamp(self.sp+val/15, 0, 100)
+
+        return l_sp, r_sp
+            
 def main():
     '''The main function of our program'''
 
@@ -51,52 +82,39 @@ def main():
     set_cursor(OFF)
     set_font('Lat15-Terminus24x12')
 
-    # display something on the screen of the device
-    print('Hello World!')
-
-    # print something to the output panel in VS Code
-    debug_print('Hello VS Code!')
-
     # announce program start
-    ev3.Sound.speak('Test program starting!').wait()
+    ev3.Sound.speak('Starting Run').wait()
 
     # set the motor variables
-    mb = ev3.LargeMotor('outB')
-    mc = ev3.LargeMotor('outC')
-    sp = -25
+    mb = ev3.LargeMotor('outB') # left
+    mc = ev3.LargeMotor('outC') # right
 
     # set the ultrasonic sensor variable
-    us3 = ev3.UltrasonicSensor('in3')
+    us2 = ev3.UltrasonicSensor('in2') # left
+    us3 = ev3.UltrasonicSensor('in3') # right
 
-    # program loop
-    for x in range (1, 5):
-        
-        # fetch the distance
-        ds = us3.value()
-            
-        # display the distance on the screen of the device
-        print('Distance =',ds)
+    controller = PIDController()
 
-        # print the distance to the output panel in VS Code
-        debug_print('Distance =',ds)
-        
-        # announce the distance
-        ev3.Sound.speak(ds).wait()
+    reset_period = 2
 
-        # move
-        mb.run_direct(duty_cycle_sp=sp)
-        mc.run_direct(duty_cycle_sp=sp)
-        time.sleep(1)
+    c_time = time.time()
+    end_time = time.time() + reset_period
+    while True:
+        l_time = c_time
+        c_time = time.time()
+        # reset the pid controller every reset period
+        if c_time > end_time:
+            controller.reset()
+            end_time = c_time + reset_period
+        d_time = c_time-l_time
 
-        # stop
-        mb.run_direct(duty_cycle_sp=0)
-        mc.run_direct(duty_cycle_sp=0)
-        
-        # reverse direction
-        sp = -sp
-    
-    # announce program end
-    ev3.Sound.speak('Test program ending').wait()
+        l_sp, r_sp = controller.calculate_motors(us2.value(), us3.value(), d_time)
+
+        debug_print("l_sp: ", l_sp, ", r_sp: ", r_sp)
+        mb.run_direct(duty_cycle_sp=l_sp)
+        mc.run_direct(duty_cycle_sp=r_sp)
+
+        time.sleep(0.05)
 
 if __name__ == '__main__':
     main()
