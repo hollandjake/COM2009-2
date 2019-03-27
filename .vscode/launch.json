@@ -5,7 +5,7 @@
             "name": "Download and Run",
             "type": "ev3devBrowser",
             "request": "launch",
-            "program": "/home/robot/${workspaceRootFolderName}/com2009-3009_ev3dev_test.py"
+            "program": "/home/robot/${workspaceRootFolderName}/Search.py"
         }
     ]
 }
