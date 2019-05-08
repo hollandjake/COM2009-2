@@ -9,7 +9,7 @@ import sys
 import time
 from ev3dev2.motor import LargeMotor, OUTPUT_B, OUTPUT_C, SpeedPercent, MoveTank
 from ev3dev2.sensor import INPUT_3, INPUT_2, INPUT_1, INPUT_4
-from ev3dev2.sensor.lego import UltrasonicSensor, ColorSensor
+from ev3dev2.sensor.lego import UltrasonicSensor, ColorSensor, GyroSensor
 import ev3dev.ev3 as ev3
 from ev3dev2.led import Leds
 import math
@@ -118,27 +118,28 @@ def set_font(name):
     os.system('setfont ' + name)
 
 def main():
-
-    gy = ev3.GyroSensor('in4')
-    gy.mode = 'GYRO-CAL'
-    gy.mode = 'GYRO-ANG'
-    GYRO = gy.value() % 360
+    gyro = GyroSensor(INPUT_4)
+    gyro.mode = GyroSensor.MODE_GYRO_CAL
+    gyro.mode = GyroSensor.MODE_GYRO_ANG
 
     tank_drive = MoveTank(OUTPUT_B,OUTPUT_C)
     leftSensor = UltrasonicSensor(INPUT_2)
     rightSensor = UltrasonicSensor(INPUT_3)
     lightSensor = ColorSensor(INPUT_1)
-    lightSensor.mode = 'COL-AMBIENT'
+    lightSensor.mode = ColorSensor.MODE_COL_AMBIENT
     rmean = RunningStats()
 
     def scan():
         debug_print("SCAN")
 
         theta = 15
+        bestAngle = 0
+        bestLight = 0
         
+        tank_drive.on(50,-50)
         for angle in range(0,360,theta):
             debug_print(angle)
-            rotateDeg(theta)
+            gyro.wait_until_angle_changed_by(theta)
             sensor = lightSensor.value()
             rmean.push(sensor)
             if (rmean.standard_deviation() + rmean.mean()) < sensor:
@@ -146,8 +147,12 @@ def main():
                     debug_print("DO YOU HAVE LAMP")
                     exit()
                 return
+            
+            if sensor > bestLight:
+                bestLight = sensor
+                bestAngle = angle
 
-        rotateDeg(random.randint(0,360))
+        gyro.wait_until_angle_changed_by(bestAngle)
         return
 
     def anyObstacles():
@@ -165,41 +170,17 @@ def main():
 
     def levyFlight():
         debug_print("LEVY")
-        dist = 50-max(15,min(50,int(levy(1.5)*100)))
-        dist = dist
-        chunks = min(15,dist)
-
-        debug_print(dist)
-        
-        if (int(chunks) > 0):
-            for x in range(0, dist, chunks):
-                if anyObstacles():
-                    debug_print("OBSTACLE")
-                    moveDist(-0.1)
-                    return
-                moveDist(chunks/100)
-
-    def moveM(distance):
-        tank_drive.on
-    
-    def rotateDeg(degree):
-        GYRO = gy.value() % 360
-        targetAngle = (GYRO + degree) % 360
-        # tank_drive.on_for_rotations(-50,50,(math.pi*0.15/ROT_M)*degree)
-
-        while abs(GYRO - targetAngle) > 10 and abs(GYRO + targetAngle) % 360 > 10:
-            if GYRO > targetAngle:
-                tank_drive.on_for_rotations(-50,50,0.1)
-            else:
-                tank_drive.on_for_rotations(50,-50,0.1)
-            GYRO = gy.value() % 360
-
-    def moveDist(dist):
-        DIAMETER_OF_WHEEL_CHASSIS = 0.125 #in m
+        x = 50-max(15,min(50,int(levy(1.5)*100)))
+        debug_print(x)
+        start = time.time()
 
         debug_print("DRIVE")
-        tank_drive.on_for_rotations(50,50,dist*ROT_M)
-
+        while time.time() - start < x:
+            tank_drive.on(50,50)
+            if anyObstacles():
+                debug_print("OBSTACLE")
+                break
+        tank_drive.stop()
 
     '''The main function of our program'''
 
