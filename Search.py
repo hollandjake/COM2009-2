@@ -8,13 +8,64 @@ import os
 import sys
 import time
 from ev3dev2.motor import LargeMotor, OUTPUT_B, OUTPUT_C, SpeedPercent, MoveTank
-from ev3dev2.sensor import INPUT_3, INPUT_2
-from ev3dev2.sensor.lego import UltrasonicSensor
+from ev3dev2.sensor import INPUT_3, INPUT_2, INPUT_1, INPUT_4
+from ev3dev2.sensor.lego import UltrasonicSensor, ColorSensor
 import ev3dev.ev3 as ev3
 from ev3dev2.led import Leds
 import math
 import time
 import random
+
+class RunningStats:
+    # The following are to calculate the running stats
+
+    def __init__(self):
+        self.m_n = 0
+        self.m_oldM = 0
+        self.m_newM = 0
+        self.m_oldS = 0
+        self.m_newS = 0
+
+    # @staticmethod
+    def push(self, x):
+        self.m_n = self.m_n + 1
+
+        if (self.m_n == 1):
+            # Double check it
+            # TODO
+            self.m_newM = x
+            self.m_oldM = x
+            self.m_oldS = 0.0
+        else:
+            self.m_newM = self.m_oldM + (x - self.m_oldM)/self.m_n
+            self.m_newS = self.m_oldS + (x - self.m_oldM)*(x - self.m_newM)
+            # set up for next iteration
+            self.m_oldM = self.m_newM
+            self.m_oldS = self.m_newS
+
+    # Calculates the running variance
+    def variance(self):
+        # Changed to greater or equals to make sure that the value will
+        # be different than 0
+        # When the variable is greater, returns the equation
+        if (self.m_n > 1):
+            return (self.m_newS)/(self.m_n-1)
+        else:
+            return 0.0
+
+    # Calculates the running standard deviation
+
+    def standard_deviation(self):
+        return math.sqrt(self.variance())
+
+    # Calculates the running mean
+    def mean(self):
+        # Changed to greater or equals to make sure that the value will be
+        # different than 0
+        if (self.m_n >= 1):
+            return self.m_newM
+        else:
+            return 0.0
 
 
 def levy(mu):
@@ -66,45 +117,6 @@ def set_font(name):
     '''
     os.system('setfont ' + name)
 
-def scan(tank_drive, lightSensor):
-    theta = 15
-    bestLight = 0
-    bestAngle = 0
-    for angle in range(0,360,theta):
-        rotateDeg(theta)
-        sensor = lightSensor.value()
-        if bestLight < sensor:
-            bestLight = sensor
-            angle = bestAngle
-
-    return 
-
-def anyObstacles(leftSensor, rightSensor):
-    leftDist = leftSensor.value()
-    rightDist = rightSensor.value()
-
-    threshold = 100
-
-    if leftDist > threshold or rightDist > threshold:
-        return True
-    else
-        return False
-
-def levyFlight(tank_drive, theta, leftSensor, rightSensor):
-    rotateDeg(theta)
-    dist = max(5,min(25,int(levy(1.5)*100)))
-    dist = dist/100
-    chunks = min(0.1,dist)
-
-    for x in range(0, dist, chunks):
-        if anyObstacles(leftSensor,rightSensor):
-            return
-        moveDist(chunks)
-
-
-
-
-
 def main():
 
     gy = ev3.GyroSensor('in4')
@@ -115,14 +127,67 @@ def main():
     tank_drive = MoveTank(OUTPUT_B,OUTPUT_C)
     leftSensor = UltrasonicSensor(INPUT_2)
     rightSensor = UltrasonicSensor(INPUT_3)
+    lightSensor = ColorSensor(INPUT_1)
+    lightSensor.mode = 'COL-AMBIENT'
+    rmean = RunningStats()
+
+    def scan():
+        debug_print("SCAN")
+
+        theta = 15
+        
+        for angle in range(0,360,theta):
+            debug_print(angle)
+            rotateDeg(theta)
+            sensor = lightSensor.value()
+            rmean.push(sensor)
+            if (rmean.standard_deviation() + rmean.mean()) < sensor:
+                if (rmean.standard_deviation()*3 + rmean.mean()) < sensor and sensor > 20:
+                    debug_print("DO YOU HAVE LAMP")
+                    exit()
+                return
+
+        rotateDeg(random.randint(0,360))
+        return
+
+    def anyObstacles():
+        leftDist = leftSensor.value()
+        rightDist = rightSensor.value()
+
+        debug_print(leftDist, rightDist)
+
+        threshold = 100
+
+        if ((leftDist < threshold) or (rightDist < threshold)):
+            return True
+        else:
+            return False
+
+    def levyFlight():
+        debug_print("LEVY")
+        dist = 50-max(15,min(50,int(levy(1.5)*100)))
+        dist = dist
+        chunks = min(15,dist)
+
+        debug_print(dist)
+        
+        if (int(chunks) > 0):
+            for x in range(0, dist, chunks):
+                if anyObstacles():
+                    debug_print("OBSTACLE")
+                    moveDist(-0.1)
+                    return
+                moveDist(chunks/100)
 
     def moveM(distance):
         tank_drive.on
     
-    def rotateDeg(degree,right=True):
+    def rotateDeg(degree):
         GYRO = gy.value() % 360
         targetAngle = (GYRO + degree) % 360
-        while abs(GYRO - targetAngle) < 4 or abs(GYRO + targetAngle) % 360 < 4:
+        # tank_drive.on_for_rotations(-50,50,(math.pi*0.15/ROT_M)*degree)
+
+        while abs(GYRO - targetAngle) > 10 and abs(GYRO + targetAngle) % 360 > 10:
             if GYRO > targetAngle:
                 tank_drive.on_for_rotations(-50,50,0.1)
             else:
@@ -131,8 +196,9 @@ def main():
 
     def moveDist(dist):
         DIAMETER_OF_WHEEL_CHASSIS = 0.125 #in m
-        ROT_PER_M = 1000/math.pi*DIAMETER_OF_WHEEL_CHASSIS
-        tank_drive.on_for_rotations(100,100,dist*ROT_PER_M)
+
+        debug_print("DRIVE")
+        tank_drive.on_for_rotations(50,50,dist*ROT_M)
 
 
     '''The main function of our program'''
@@ -146,39 +212,40 @@ def main():
     threshold = 300
     factor = 1
     infinity = 2550
+
     while True:
-        angle = scan(tank_drive,lightSensor)
-        levyFlight(angle)
+        scan()
+        levyFlight()
 
-        dl = leftSensor.value()
-        dr = rightSensor.value()
-        gyro = gy.value() % 360
-        debug_print(gyro)
+        # dl = leftSensor.value()
+        # dr = rightSensor.value()
+        # gyro = gy.value() % 360
+        # debug_print(gyro)
 
-        while time.sleep(0.01):
-            tank_drive.on_for_rotations()
+        # while time.sleep(0.01):
+        #     tank_drive.on_for_rotations()
 
-        if gyro in range(88,92) or gyro in range(178,182) or gyro in range(268,272) or (gyro in range(358,360) or gyro in range(0,2)):
-            tank_drive.on(0,0)
-            time.sleep(3)
-        rl,rr = 1, 1
+        # if gyro in range(88,92) or gyro in range(178,182) or gyro in range(268,272) or (gyro in range(358,360) or gyro in range(0,2)):
+        #     tank_drive.on(0,0)
+        #     time.sleep(3)
+        # rl,rr = 1, 1
 
-        if dl < threshold:
-            rl += (infinity-dl)*factor
+        # if dl < threshold:
+        #     rl += (infinity-dl)*factor
 
-        if dr < threshold:
-            rr += (infinity-dr)*factor
+        # if dr < threshold:
+        #     rr += (infinity-dr)*factor
 
-        #ratio balancing
-        if rl > rr:
-            rr = rr/rl
-            rl = 1
-        else:
-            rl = rl/rr
-            rr = 1
+        # #ratio balancing
+        # if rl > rr:
+        #     rr = rr/rl
+        #     rl = 1
+        # else:
+        #     rl = rl/rr
+        #     rr = 1
 
-        rotateDeg(90)
-        break   
+        # rotateDeg(90)
+        # break   
 
 
 
