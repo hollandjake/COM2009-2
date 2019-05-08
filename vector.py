@@ -1,11 +1,11 @@
+import math
 class Vector:
     def __init__(self, x, y):
         self.x = x
         self.y = y
 
     def fromAngle(angle, magnitude):
-        self.x = magnitude*math.cos(angle)
-        self.y = magnitude*math.sin(angle)
+        return Vector(magnitude*math.cos(angle),magnitude*math.sin(angle))
 
     def __add__(self, other):
         return Vector(self.x + other.x, self.y + other.y)

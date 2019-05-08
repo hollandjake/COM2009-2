@@ -14,6 +14,22 @@ import ev3dev.ev3 as ev3
 from ev3dev2.led import Leds
 import math
 import time
+import random
+
+
+def levy(mu):
+	''' From the Harris Nature paper. '''
+	# uniform distribution, in range [-0.5pi, 0.5pi]
+	x = random.uniform(-0.5 * math.pi, 0.5 * math.pi)
+
+	# y has a unit exponential distribution.
+	y = -math.log(random.uniform(0.0, 1.0))
+
+	a = math.sin( (mu - 1.0) * x ) / (math.pow(math.cos(x), (1.0 / (mu - 1.0))))
+	b = math.pow( (math.cos((2.0 - mu) * x) / y), ((2.0 - mu) / (mu - 1.0)) )
+    
+    #this might break
+	return a * b
 
 # state constants
 ON = True
@@ -50,6 +66,44 @@ def set_font(name):
     '''
     os.system('setfont ' + name)
 
+def scan(tank_drive, lightSensor):
+    theta = 15
+    bestLight = 0
+    bestAngle = 0
+    for angle in range(0,360,theta):
+        rotateDeg(theta)
+        sensor = lightSensor.value()
+        if bestLight < sensor:
+            bestLight = sensor
+            angle = bestAngle
+
+    return 
+
+def anyObstacles(leftSensor, rightSensor):
+    leftDist = leftSensor.value()
+    rightDist = rightSensor.value()
+
+    threshold = 100
+
+    if leftDist > threshold or rightDist > threshold:
+        return True
+    else
+        return False
+
+def levyFlight(tank_drive, theta, leftSensor, rightSensor):
+    rotateDeg(theta)
+    dist = max(5,min(25,int(levy(1.5)*100)))
+    dist = dist/100
+    chunks = min(0.1,dist)
+
+    for x in range(0, dist, chunks):
+        if anyObstacles(leftSensor,rightSensor):
+            return
+        moveDist(chunks)
+
+
+
+
 
 def main():
 
@@ -68,12 +122,19 @@ def main():
     def rotateDeg(degree,right=True):
         GYRO = gy.value() % 360
         targetAngle = (GYRO + degree) % 360
-        while GYRO != targetAngle:
+        while abs(GYRO - targetAngle) < 4 or abs(GYRO + targetAngle) % 360 < 4:
             if GYRO > targetAngle:
                 tank_drive.on_for_rotations(-50,50,0.1)
             else:
                 tank_drive.on_for_rotations(50,-50,0.1)
             GYRO = gy.value() % 360
+
+    def moveDist(dist):
+        DIAMETER_OF_WHEEL_CHASSIS = 0.125 #in m
+        ROT_PER_M = 1000/math.pi*DIAMETER_OF_WHEEL_CHASSIS
+        tank_drive.on_for_rotations(100,100,dist*ROT_PER_M)
+
+
     '''The main function of our program'''
 
     # set the console just how we want it
@@ -86,6 +147,9 @@ def main():
     factor = 1
     infinity = 2550
     while True:
+        angle = scan(tank_drive,lightSensor)
+        levyFlight(angle)
+
         dl = leftSensor.value()
         dr = rightSensor.value()
         gyro = gy.value() % 360

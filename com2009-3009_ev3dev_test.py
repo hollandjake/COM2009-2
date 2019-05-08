@@ -57,7 +57,7 @@ class PIDController:
         self.Ki = (1.2 * Ku) / Tu
         self.Kd = (3 * Ku * Tu) / 40
         
-        self.sp = 100
+        self.sp = 50
         self.reset()
 
     def reset(self):
@@ -119,8 +119,9 @@ def main():
         l_sp, r_sp = controller.calculate_motors(us2.value(), us3.value(), d_time)
 
         light = ls1.value() 
-        if (light > 40):
+        if (light > 25):
             print("LIGHT AT"+str(c_time))
+            exit()
 
         debug_print("l_sp: ", l_sp, ", r_sp: ", r_sp, light)
         mb.run_direct(duty_cycle_sp=l_sp)
