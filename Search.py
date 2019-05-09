@@ -170,7 +170,7 @@ def main():
 
     def levyFlight():
         debug_print("LEVY")
-        x = 50-max(15,min(50,int(levy(1.5)*100)))
+        x = 10-max(1,min(10,int(levy(1.5)*100)))
         debug_print(x)
         start = time.time()
 
