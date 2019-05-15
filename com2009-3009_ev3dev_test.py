@@ -118,9 +118,9 @@ def main():
 
         l_sp, r_sp = controller.calculate_motors(us2.value(), us3.value(), d_time)
 
-        light = ls1.value() 
+        light = ls1.value()
         if (light > 25):
-            print("LIGHT AT"+str(c_time))
+            print("LIGHT AT"+str(c_time)+" Intesity:"+str(light))
             exit()
 
         debug_print("l_sp: ", l_sp, ", r_sp: ", r_sp, light)

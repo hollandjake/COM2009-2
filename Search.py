@@ -132,52 +132,62 @@ def main():
     def scan():
         debug_print("SCAN")
 
-        theta = 15
+        theta = 5 #deg
         bestAngle = 0
         bestLight = 0
         
-        tank_drive.on(50,-50)
+        tank_drive.on(25,-25)
         for angle in range(0,360,theta):
             debug_print(angle)
             gyro.wait_until_angle_changed_by(theta)
             sensor = lightSensor.value()
             rmean.push(sensor)
             if (rmean.standard_deviation() + rmean.mean()) < sensor:
-                if (rmean.standard_deviation()*3 + rmean.mean()) < sensor and sensor > 20:
+                while (rmean.standard_deviation()*3 + rmean.mean()) < sensor and sensor > 20:
+                    sensor = lightSensor.value()
                     debug_print("DO YOU HAVE LAMP")
-                    exit()
+                    tank_drive.stop()
                 return
             
             if sensor > bestLight:
                 bestLight = sensor
                 bestAngle = angle
 
+        debug_print(bestAngle, bestLight)
         gyro.wait_until_angle_changed_by(bestAngle)
-        return
 
     def anyObstacles():
         leftDist = leftSensor.value()
         rightDist = rightSensor.value()
+        light = lightSensor.value()
 
         debug_print(leftDist, rightDist)
 
-        threshold = 100
+        threshold = 100 #mm
+
+        rmean.push(light)
+        while (rmean.standard_deviation()*3 + rmean.mean()) < light and light > 20:
+            light = lightSensor.value()
+            debug_print("DO YOU HAVE LAMP")
+            tank_drive.stop()
 
         if ((leftDist < threshold) or (rightDist < threshold)):
             return True
         else:
             return False
 
-    def levyFlight():
+    def levyFlight(x = 0):
         debug_print("LEVY")
-        x = 10-max(1,min(10,int(levy(1.5)*100)))
-        debug_print(x)
+        if x == 0:
+            x = 11-max(1,min(10,int(levy(1.5)*100)))
+            debug_print(x)
         start = time.time()
 
         debug_print("DRIVE")
         while time.time() - start < x:
             tank_drive.on(50,50)
             if anyObstacles():
+                tank_drive.on_for_rotations(-50,-50,1)
                 debug_print("OBSTACLE")
                 break
         tank_drive.stop()
@@ -189,46 +199,11 @@ def main():
     set_cursor(OFF)
     set_font('Lat15-Terminus24x12')
 
-    speed = 100 ##TODO we need to find a value between 50 and 100 for which the system still works - 50 would replicate our old functionality and 100 would be twice the speed
-    threshold = 300
-    factor = 1
-    infinity = 2550
+    levyFlight(10)
 
     while True:
         scan()
         levyFlight()
-
-        # dl = leftSensor.value()
-        # dr = rightSensor.value()
-        # gyro = gy.value() % 360
-        # debug_print(gyro)
-
-        # while time.sleep(0.01):
-        #     tank_drive.on_for_rotations()
-
-        # if gyro in range(88,92) or gyro in range(178,182) or gyro in range(268,272) or (gyro in range(358,360) or gyro in range(0,2)):
-        #     tank_drive.on(0,0)
-        #     time.sleep(3)
-        # rl,rr = 1, 1
-
-        # if dl < threshold:
-        #     rl += (infinity-dl)*factor
-
-        # if dr < threshold:
-        #     rr += (infinity-dr)*factor
-
-        # #ratio balancing
-        # if rl > rr:
-        #     rr = rr/rl
-        #     rl = 1
-        # else:
-        #     rl = rl/rr
-        #     rr = 1
-
-        # rotateDeg(90)
-        # break   
-
-
 
 if __name__ == '__main__':
     main()
